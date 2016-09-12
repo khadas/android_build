@@ -566,6 +566,9 @@ function lunch()
     elif (echo -n $answer | grep -q -e "^[^\-][^\-]*-[^\-][^\-]*$")
     then
         selection=$answer
+    elif (echo -n $answer | grep -q -e "^[^\-][^\-]*-[^\-][^\-]*-[^\-][^\-]*$")
+    then
+        selection=$answer
     fi
 
     if [ -z "$selection" ]
@@ -577,7 +580,7 @@ function lunch()
 
     export TARGET_BUILD_APPS=
 
-    local variant=$(echo -n $selection | sed -e "s/^[^\-]*-//")
+    local variant=$(echo -n $selection | sed -rn "s/(^[^\-]+)-([^\-]+)(-.*)/\2/p")
     check_variant $variant
     if [ $? -ne 0 ]
     then
@@ -608,6 +611,13 @@ function lunch()
     export TARGET_PRODUCT=$product
     export TARGET_BUILD_VARIANT=$variant
     export TARGET_BUILD_TYPE=release
+
+    local android_build_type=$(echo -n $selection | sed -rn "s/($product-$variant-)([0-9][0-9])$/\2/p")
+    if [ "$android_build_type" -gt 0 ]
+    then
+        echo "ANDROID_BUILD_TYPE=$android_build_type"
+        export ANDROID_BUILD_TYPE=$android_build_type
+    fi
 
     echo
 
