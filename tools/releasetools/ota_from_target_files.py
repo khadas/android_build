@@ -160,6 +160,7 @@ OPTIONS.cache_size = None
 OPTIONS.stash_threshold = 0.8
 OPTIONS.gen_verify = False
 OPTIONS.log_diff = None
+OPTIONS.update_dtb = False
 
 def MostPopularKey(d, default):
   """Given a dict, return the key corresponding to the largest
@@ -520,6 +521,35 @@ def GetImage(which, tmpdir, info_dict):
 
   return sparse_img.SparseImage(path, mappath, clobbered_blocks)
 
+def UpdateLogo(input_zip, output_zip, script):
+  logo_img_exists = 0
+  try:
+    logo_img_info = input_zip.getinfo("LOGO/logo")
+    logo_img_exists = 1
+    logo_img = common.File("logo.img", input_zip.read("LOGO/logo"))
+  except KeyError:
+    print 'WARNING: Did not find logo'
+
+  if logo_img_exists:
+    common.CheckSize(logo_img.data, "logo.img", OPTIONS.info_dict)
+    common.ZipWriteStr(output_zip, "logo.img", logo_img.data)
+    script.WriteRawImage("/logo", "logo.img")
+
+
+def UpdateDtb(input_zip, output_zip, script):
+  dtb_img_exists = 0
+  try:
+    dtb_img_info = input_zip.getinfo("DTB/dtb")
+    dtb_img_exists = 1
+    dtb_img = common.File("dtb.img", input_zip.read("DTB/dtb"))
+  except KeyError:
+    print 'ERROR: Did not find dtb'
+    sys.exit(1)
+
+  if dtb_img_exists:
+    common.ZipWriteStr(output_zip, "dtb.img", dtb_img.data)
+    script.WriteDtbImage("dtb.img")
+
 
 def WriteFullOTAPackage(input_zip, output_zip):
   # TODO: how to determine this?  We don't know what version it will
@@ -557,7 +587,7 @@ def WriteFullOTAPackage(input_zip, output_zip):
       info_dict=OPTIONS.info_dict)
 
   has_recovery_patch = HasRecoveryPatch(input_zip)
-  block_based = OPTIONS.block_based and has_recovery_patch
+  block_based = OPTIONS.block_based# and has_recovery_patch
 
   metadata["ota-type"] = "BLOCK" if block_based else "FILE"
 
@@ -685,11 +715,22 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
       vendor_items.GetMetadata(input_zip)
       vendor_items.Get("vendor").SetPermissions(script)
 
+  UpdateLogo(input_zip, output_zip, script)
+
+  if OPTIONS.update_dtb:
+      UpdateDtb(input_zip, output_zip, script)
+
   common.CheckSize(boot_img.data, "boot.img", OPTIONS.info_dict)
   common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
   script.ShowProgress(0.05, 5)
   script.WriteRawImage("/boot", "boot.img")
+
+  if not has_recovery_patch and recovery_img :
+      common.CheckSize(recovery_img.data, "recovery.img", OPTIONS.info_dict)
+      common.ZipWriteStr(output_zip, "recovery.img", recovery_img.data)
+      script.ShowProgress(0.05, 5)
+      script.WriteRawImage("/recovery", "recovery.img")
 
   script.ShowProgress(0.2, 10)
   device_specific.FullOTA_InstallEnd()
@@ -1886,6 +1927,8 @@ def main(argv):
       OPTIONS.verify = True
     elif o == "--block":
       OPTIONS.block_based = True
+    elif o in ("--dtb"):
+      OPTIONS.update_dtb = True
     elif o in ("-b", "--binary"):
       OPTIONS.updater_binary = a
     elif o in ("--no_fallback_to_full",):
@@ -1921,6 +1964,7 @@ def main(argv):
                                  "two_step",
                                  "no_signing",
                                  "block",
+                                 "dtb",
                                  "binary=",
                                  "oem_settings=",
                                  "oem_no_mount",
