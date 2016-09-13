@@ -444,12 +444,19 @@ event-log-tags: $(event_log_tags_file)
 
 ALL_DEFAULT_INSTALLED_MODULES += $(event_log_tags_file)
 
+INSTALLED_AMLOGIC_BOOTLOADER_TARGET := $(PRODUCT_OUT)/u-boot.bin
+
 
 # #################################################################
 # Targets for boot/OS images
 # #################################################################
 ifneq ($(strip $(TARGET_NO_BOOTLOADER)),true)
+  amlogic_bootloader := $(strip $(wildcard $(TARGET_DEVICE_DIR)/u-boot.bin))
+  ifneq ($(amlogic_bootloader),)
+	INSTALLED_BOOTLOADER_MODULE := $(INSTALLED_AMLOGIC_BOOTLOADER_TARGET)
+  else
   INSTALLED_BOOTLOADER_MODULE := $(PRODUCT_OUT)/bootloader
+  endif
   ifeq ($(strip $(TARGET_BOOTLOADER_IS_2ND)),true)
     INSTALLED_2NDBOOTLOADER_TARGET := $(PRODUCT_OUT)/2ndbootloader
   else
@@ -837,6 +844,17 @@ ifneq (,$(INSTALLED_RECOVERYIMAGE_TARGET)$(filter true,$(BOARD_USES_RECOVERY_AS_
 INTERNAL_RECOVERYIMAGE_FILES := $(filter $(TARGET_RECOVERY_OUT)/%, \
     $(ALL_DEFAULT_INSTALLED_MODULES))
 
+recovery_amlogic_initrc := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/init.recovery.*.rc))
+ifneq ($(recovery_amlogic_initrc),)
+  recovery_amlogic_initrc := $(recovery_amlogic_initrc)
+endif
+
+recovery_sh := $(TARGET_OUT)/bin/sh
+custom_recovery_sh := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/sh))
+ifneq ($(custom_recovery_sh),)
+  recovery_sh := $(custom_recovery_sh)
+endif
+
 recovery_initrc := $(call include-path-for, recovery)/etc/init.rc
 recovery_sepolicy := $(call intermediates-dir-for,ETC,sepolicy.recovery)/sepolicy.recovery
 recovery_kernel := $(INSTALLED_KERNEL_TARGET) # same as a non-recovery system
@@ -876,6 +894,9 @@ TARGET_PRIVATE_RES_DIRS := $(wildcard $(TARGET_DEVICE_DIR)/recovery/res)
 endif
 recovery_resource_deps := $(shell find $(recovery_resources_common) \
   $(TARGET_PRIVATE_RES_DIRS) -type f)
+recovery_kl := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/recovery.kl))
+
+TARGET_RECOVERY_FSTAB := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/recovery.fstab))
 ifdef TARGET_RECOVERY_FSTAB
 recovery_fstab := $(TARGET_RECOVERY_FSTAB)
 else
@@ -905,9 +926,22 @@ ifeq ($(TARGET_PRIVATE_RES_DIRS),)
   $(info No private recovery resources for TARGET_DEVICE $(TARGET_DEVICE))
 endif
 
+recovery_busybox := $(PRODUCT_OUT)/utilities/busybox
+custom_recovery_busybox := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/busybox))
+ifneq ($(custom_recovery_busybox),)
+  recovery_busybox := $(custom_recovery_busybox)
+endif
+
 ifeq ($(recovery_fstab),)
   $(info No recovery.fstab for TARGET_DEVICE $(TARGET_DEVICE))
 endif
+
+recovery_remote := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/remotecfg))
+recovery_remote_conf := $(strip $(wildcard $(TARGET_DEVICE_DIR)/files/remote.conf))
+recovery_systemcontrol := $(PRODUCT_OUT)/utilities/systemcontrol_static
+recovery_mesondisplay_cfg := $(strip $(wildcard $(TARGET_DEVICE_DIR)/files/mesondisplay.cfg))
+recovery_usb_ko := $(TARGET_OUT)/lib/dwc_otg.ko
+recovery_usb3_ko := $(TARGET_OUT)/lib/dwc3.ko
 
 INTERNAL_RECOVERYIMAGE_ARGS := \
 	$(addprefix --second ,$(INSTALLED_2NDBOOTLOADER_TARGET)) \
@@ -972,6 +1006,17 @@ define build-recoveryimage-target
   $(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/res/keys
   $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
           > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+  $(hide) -cp $(recovery_amlogic_initrc) $(TARGET_RECOVERY_ROOT_OUT) || true
+  $(hide) -cp -f $(recovery_kl) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.kl || true
+  $(if $(filter true,$(TARGET_RECOVERY_NO_BUSYBOX)),, \
+    $(hide) -cp -f $(recovery_busybox) $(TARGET_RECOVERY_ROOT_OUT)/sbin/) || true
+  $(hide) -cp -f $(recovery_remote) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
+  $(hide) -cp -f $(recovery_remote_conf) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true
+  $(hide) -cp -f $(recovery_systemcontrol) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
+  $(hide) -cp -f $(recovery_mesondisplay_cfg) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true
+  $(hide) -cp -f $(recovery_usb_ko) $(TARGET_RECOVERY_ROOT_OUT)/boot/ || true
+  $(hide) -cp -f $(recovery_usb3_ko) $(TARGET_RECOVERY_ROOT_OUT)/boot/ || true
+  $(hide) -cp -f $(recovery_sh) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
   $(if $(filter true,$(BOARD_BUILD_SYSTEM_ROOT_IMAGE)), \
     $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system_root; \
             rm -rf $(TARGET_RECOVERY_ROOT_OUT)/system; \
@@ -1017,7 +1062,10 @@ $(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
 		$(INSTALLED_2NDBOOTLOADER_TARGET) \
 		$(recovery_build_prop) $(recovery_resource_deps) \
 		$(recovery_fstab) \
-		$(RECOVERY_INSTALL_OTA_KEYS)
+		$(RECOVERY_INSTALL_OTA_KEYS) \
+		$(recovery_busybox) \
+		$(recovery_sh) \
+		$(recovery_systemcontrol)
 		$(call build-recoveryimage-target, $@)
 
 ifdef RECOVERY_RESOURCE_ZIP
@@ -1651,6 +1699,10 @@ ifneq (,$(INSTALLED_RECOVERYIMAGE_TARGET)$(filter true,$(BOARD_USES_RECOVERY_AS_
 ifdef INSTALLED_KERNEL_TARGET
 	$(hide) $(ACP) $(INSTALLED_KERNEL_TARGET) $(zip_root)/$(PRIVATE_RECOVERY_OUT)/kernel
 endif
+ifdef INSTALLED_BOOTLOADER_MODULE
+	$(hide) mkdir -p $(zip_root)/BOOTLOADER
+	$(hide) $(ACP) $(INSTALLED_BOOTLOADER_MODULE) $(zip_root)/BOOTLOADER/bootloader
+endif
 ifdef INSTALLED_2NDBOOTLOADER_TARGET
 	$(hide) $(ACP) \
 		$(INSTALLED_2NDBOOTLOADER_TARGET) $(zip_root)/$(PRIVATE_RECOVERY_OUT)/second
@@ -1666,6 +1718,10 @@ ifdef BOARD_KERNEL_PAGESIZE
 endif
 ifdef BOARD_KERNEL_OFFSET
 	$(hide) echo "$(BOARD_KERNEL_OFFSET)" > $(zip_root)/$(PRIVATE_RECOVERY_OUT)/kernel_offset
+endif
+	$(hide) mkdir -p $(zip_root)/LOGO
+ifneq ($(INSTALLED_AML_LOGO),)
+	$(hide) $(ACP) $(INSTALLED_AML_LOGO) $(zip_root)/LOGO/logo
 endif
 endif # INSTALLED_RECOVERYIMAGE_TARGET defined or BOARD_USES_RECOVERY_AS_BOOT is true
 	@# Components of the boot image
@@ -1686,6 +1742,13 @@ endif
 ifdef INSTALLED_2NDBOOTLOADER_TARGET
 	$(hide) $(ACP) \
 		$(INSTALLED_2NDBOOTLOADER_TARGET) $(zip_root)/BOOT/second
+endif
+ifdef INSTALLED_BOARDDTB_TARGET
+ifeq ($(strip $(TARGET_OTA_UPDATE_DTB)),true)
+	$(hide) mkdir -p $(zip_root)/DTB
+	$(hide) $(ACP) $(INSTALLED_BOARDDTB_TARGET) $(zip_root)/DTB/dtb
+endif
+	$(hide) $(ACP) $(INSTALLED_BOARDDTB_TARGET) $(zip_root)/BOOT/second
 endif
 ifdef BOARD_KERNEL_CMDLINE
 	$(hide) echo "$(BOARD_KERNEL_CMDLINE)" > $(zip_root)/BOOT/cmdline
@@ -1787,10 +1850,10 @@ ifeq ($(BOARD_USES_FULL_RECOVERY_IMAGE),true)
 	$(hide) echo "full_recovery_image=true" >> $(zip_root)/META/misc_info.txt
 endif
 	$(call generate-userimage-prop-dictionary, $(zip_root)/META/misc_info.txt)
-ifneq ($(INSTALLED_RECOVERYIMAGE_TARGET),)
+ifeq ($(TARGET_USE_RECOVERY_FROM_BOOT_P),true) #default no using recovry-form-boot.p
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
 	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
-endif
+endif #ifeq ($(TARGET_USE_RECOVERY_FROM_BOOT_P),true)
 ifeq ($(AB_OTA_UPDATER),true)
 	@# When using the A/B updater, include the updater config files in the zip.
 	$(hide) $(ACP) $(TOPDIR)system/update_engine/update_engine.conf $(zip_root)/META/update_engine_config.txt
@@ -1849,6 +1912,10 @@ ifeq ($(TARGET_BUILD_TYPE),debug)
 endif
 name := $(name)-ota-$(FILE_NAME_TAG)
 
+ifeq ($(strip $(TARGET_OTA_UPDATE_DTB)),true)
+  UPDATE_DTB := --dtb
+endif
+
 INTERNAL_OTA_PACKAGE_TARGET := $(PRODUCT_OUT)/$(name).zip
 
 $(INTERNAL_OTA_PACKAGE_TARGET): KEY_CERT_PAIR := $(DEFAULT_KEY_CERT_PAIR)
@@ -1858,6 +1925,7 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE)
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
 	   ./build/tools/releasetools/ota_from_target_files -v \
 	   --block \
+	   $(UPDATE_DTB) \
 	   -p $(HOST_OUT) \
 	   -k $(KEY_CERT_PAIR) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \
