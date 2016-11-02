@@ -35,6 +35,7 @@ if sys.hexversion < 0x02070000:
 import os
 import shutil
 import zipfile
+import subprocess
 
 import common
 
@@ -47,6 +48,19 @@ def CopyInfo(output_zip):
       output_zip, os.path.join(OPTIONS.input_tmp, "OTA", "android-info.txt"),
       "android-info.txt")
 
+def RunCommand(cmd):
+  """Echo and run the given command.
+
+  Args:
+    cmd: the command represented as a list of strings.
+  Returns:
+    A tuple of the output and the exit code.
+  """
+  print "Running: ", " ".join(cmd)
+  p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  output, _ = p.communicate()
+  print "%s" % (output.rstrip(),)
+  return (output, p.returncode)
 
 def main(argv):
   bootable_only = [False]
@@ -75,6 +89,7 @@ def main(argv):
 
   try:
     done = False
+    simg = False
     images_path = os.path.join(OPTIONS.input_tmp, "IMAGES")
     if os.path.exists(images_path):
       # If this is a new target-files, it already contains the images,
@@ -84,9 +99,25 @@ def main(argv):
         for image in images:
           if bootable_only and image not in ("boot.img", "recovery.img"):
             continue
+          if image == "system.img":
+            unsparse_image_path = os.path.join(images_path, "unsparse_system.img")
+            sparse_image_path = os.path.join(images_path, "system.img")
+            print "sparse_image_path : %s" %(sparse_image_path)
+            print "unsparse_image_path : %s" %(unsparse_image_path)
+            if os.path.exists(unsparse_image_path):
+              os.unlink(unsparse_image_path)
+            inflate_command = ["simg2img", sparse_image_path, unsparse_image_path]
+            (_, exit_code) = RunCommand(inflate_command)
+            if exit_code == 0:
+              simg = True
+              common.ZipWrite(output_zip, unsparse_image_path, image)
+            continue
           if not image.endswith(".img"):
             continue
-          common.ZipWrite(
+          if simg:
+            continue
+          else:
+            common.ZipWrite(
               output_zip, os.path.join(images_path, image), image)
         done = True
 
