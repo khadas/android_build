@@ -161,6 +161,7 @@ OPTIONS.stash_threshold = 0.8
 OPTIONS.gen_verify = False
 OPTIONS.log_diff = None
 OPTIONS.update_dtb = False
+OPTIONS.ota_zip_check = True
 
 def MostPopularKey(d, default):
   """Given a dict, return the key corresponding to the largest
@@ -598,6 +599,9 @@ def WriteFullOTAPackage(input_zip, output_zip):
 
   AppendAssertions(script, OPTIONS.info_dict, oem_dict)
   device_specific.FullOTA_Assertions()
+
+  if OPTIONS.ota_zip_check:
+    script.AppendExtra("ota_zip_check();")
 
   # Two-step package strategy (in chronological order, which is *not*
   # the order in which the generated script has things):
