@@ -90,7 +90,13 @@ ifeq ($(strip $(LOCAL_MANIFEST_FILE)),)
 LOCAL_MANIFEST_FILE := AndroidManifest.xml
 endif
 
-OVERLAY_MANIFEST_FILE := $(strip $(wildcard $(DEVICE_PACKAGE_OVERLAYS)/$(LOCAL_PATH)/AndroidManifest.xml))
+OVERLAY_MANIFEST_FILE := $(strip \
+    $(wildcard $(foreach dir, $(PRODUCT_PACKAGE_OVERLAYS), \
+      $(addprefix $(dir)/, $(LOCAL_PATH)/AndroidManifest.xml))) \
+    $(wildcard $(foreach dir, $(DEVICE_PACKAGE_OVERLAYS), \
+      $(addprefix $(dir)/, $(LOCAL_PATH)/AndroidManifest.xml))))
+
+OVERLAY_MANIFEST_FILE := $(firstword $(OVERLAY_MANIFEST_FILE))
 
 # If you need to put the MANIFEST_FILE outside of LOCAL_PATH
 # you can use FULL_MANIFEST_FILE
