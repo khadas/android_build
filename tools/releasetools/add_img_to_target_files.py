@@ -371,14 +371,14 @@ def AddImagesToTargetFiles(filename):
     # partitions (if present), then write this file to target_files package.
     care_map_list = []
     for line in lines:
-      if line.strip() == "system" and OPTIONS.info_dict.get(
-          "system_verity_block_device", None) is not None:
-        assert os.path.exists(system_imgname)
-        care_map_list += GetCareMap("system", system_imgname)
-      if line.strip() == "vendor" and OPTIONS.info_dict.get(
-          "vendor_verity_block_device", None) is not None:
-        assert os.path.exists(vendor_imgname)
-        care_map_list += GetCareMap("vendor", vendor_imgname)
+      #if line.strip() == "system" and OPTIONS.info_dict.get(
+      #    "system_verity_block_device", None) is not None:
+      #  assert os.path.exists(system_imgname)
+      #  care_map_list += GetCareMap("system", system_imgname)
+      #if line.strip() == "vendor" and OPTIONS.info_dict.get(
+      #    "vendor_verity_block_device", None) is not None:
+      #  assert os.path.exists(vendor_imgname)
+      #  care_map_list += GetCareMap("vendor", vendor_imgname)
 
       img_name = line.strip() + ".img"
       img_radio_path = os.path.join(OPTIONS.input_tmp, "RADIO", img_name)

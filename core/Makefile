@@ -943,7 +943,7 @@ endif
 
 ifeq (,$(filter true, $(BOARD_USES_FULL_RECOVERY_IMAGE) $(BOARD_USES_RECOVERY_AS_BOOT)))
 # Named '.dat' so we don't attempt to use imgdiff for patching it.
-RECOVERY_RESOURCE_ZIP := $(TARGET_OUT)/etc/recovery-resource.dat
+RECOVERY_RESOURCE_ZIP := $(TARGET_OUT)/etc_r/recovery-resource.dat
 else
 RECOVERY_RESOURCE_ZIP :=
 endif
@@ -1012,12 +1012,16 @@ RECOVERYIMAGE_ID_FILE := $(PRODUCT_OUT)/recovery.id
 define build-recoveryimage-target
   @echo ----- Making recovery image ------
   $(hide) mkdir -p $(TARGET_RECOVERY_OUT)
-  $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc $(TARGET_RECOVERY_ROOT_OUT)/sdcard $(TARGET_RECOVERY_ROOT_OUT)/tmp
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc $(TARGET_RECOVERY_ROOT_OUT)/sdcard $(TARGET_RECOVERY_ROOT_OUT)/tmp)
+  $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
+    $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc_r $(TARGET_RECOVERY_ROOT_OUT)/sdcard $(TARGET_RECOVERY_ROOT_OUT)/tmp)
   @echo Copying baseline ramdisk...
   $(hide) rsync -a --exclude=etc --exclude=sdcard $(IGNORE_CACHE_LINK) $(TARGET_ROOT_OUT) $(TARGET_RECOVERY_OUT) # "cp -Rf" fails to overwrite broken symlinks on Mac.
   @echo Modifying ramdisk contents...
-  $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init*.rc
-  $(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init*.rc || true
+    $(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/)
   $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/sepolicy
   $(hide) cp -f $(recovery_sepolicy) $(TARGET_RECOVERY_ROOT_OUT)/sepolicy
   $(hide) cp $(TARGET_ROOT_OUT)/init.recovery.*.rc $(TARGET_RECOVERY_ROOT_OUT)/ || true # Ignore error when the src file doesn't exist.
@@ -1027,21 +1031,36 @@ define build-recoveryimage-target
   $(hide) cp -f $(recovery_font) $(TARGET_RECOVERY_ROOT_OUT)/res/images/font.png
   $(hide) $(foreach item,$(TARGET_PRIVATE_RES_DIRS), \
     cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/$(newline))
-  $(hide) $(foreach item,$(recovery_fstab), \
-    cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.fstab)
-  $(if $(strip $(recovery_wipe)), \
-    $(hide) cp -f $(recovery_wipe) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.wipe)
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(hide) $(foreach item,$(recovery_fstab), \
+      cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.fstab))
+  $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
+    $(hide) $(foreach item,$(recovery_fstab), \
+      cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc_r/recovery.fstab))
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(if $(strip $(recovery_wipe)), \
+    $(hide) cp -f $(recovery_wipe) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.wipe))
+  $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
+    $(if $(strip $(recovery_wipe)), \
+    $(hide) cp -f $(recovery_wipe) $(TARGET_RECOVERY_ROOT_OUT)/etc_r/recovery.wipe))
   $(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/res/keys
-  $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
-          > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+  $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
+          > $(TARGET_RECOVERY_ROOT_OUT)/default.prop)
   $(hide) -cp $(recovery_amlogic_initrc) $(TARGET_RECOVERY_ROOT_OUT) || true
-  $(hide) -cp -f $(recovery_kl) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.kl || true
+  $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
+    $(hide) -cp -f $(recovery_kl) $(TARGET_RECOVERY_ROOT_OUT)/etc_r/recovery.kl || true
+    $(hide) -cp -f $(recovery_mesondisplay_cfg) $(TARGET_RECOVERY_ROOT_OUT)/etc_r/ || true
+    $(hide) -cp -f $(recovery_remote_conf) $(TARGET_RECOVERY_ROOT_OUT)/etc_r/ || true)
+  $(if $(filter false,$(TARGET_NO_RECOVERY)), \
+    $(hide) -cp -f $(recovery_kl) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.kl || true
+    $(hide) -cp -f $(recovery_mesondisplay_cfg) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true
+    $(hide) -cp -f $(recovery_remote_conf) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true)
   $(if $(filter true,$(TARGET_RECOVERY_NO_BUSYBOX)),, \
     $(hide) -cp -f $(recovery_busybox) $(TARGET_RECOVERY_ROOT_OUT)/sbin/) || true
   $(hide) -cp -f $(recovery_remote) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
-  $(hide) -cp -f $(recovery_remote_conf) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true
   $(hide) -cp -f $(recovery_systemcontrol) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
-  $(hide) -cp -f $(recovery_mesondisplay_cfg) $(TARGET_RECOVERY_ROOT_OUT)/etc/ || true
   $(hide) -cp -f $(recovery_usb_ko) $(TARGET_RECOVERY_ROOT_OUT)/boot/ || true
   $(hide) -cp -f $(recovery_usb3_ko) $(TARGET_RECOVERY_ROOT_OUT)/boot/ || true
   $(hide) -cp -f $(recovery_sh) $(TARGET_RECOVERY_ROOT_OUT)/sbin/ || true
@@ -1064,8 +1083,9 @@ define build-recoveryimage-target
     $(VBOOT_SIGNER) $(FUTILITY) $(1).unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_SUBKEY).vbprivk $(1).keyblock $(1))
   $(hide) $(call aml-secureboot-sign-kernel, $(1))
   $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
-    $(hide) $(call assert-max-image-size,$(1),$(BOARD_BOOTIMAGE_PARTITION_SIZE)), \
-    $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE)))
+    $(hide) $(call assert-max-image-size,$(1),$(BOARD_BOOTIMAGE_PARTITION_SIZE))
+    $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE))
+    $(hide) cp $(TARGET_ROOT_OUT)/init.rc $(TARGET_RECOVERY_ROOT_OUT)/)
   @echo ----- Made recovery image: $(1) --------
 endef
 
@@ -1620,7 +1640,9 @@ ifeq ($(TARGET_NO_KERNEL),true)
 build_ota_package := false
 endif
 ifeq ($(recovery_fstab),)
+ifneq ($(AB_OTA_UPDATER),true)
 build_ota_package := false
+endif
 endif
 ifeq ($(TARGET_BUILD_PDK),true)
 build_ota_package := false
