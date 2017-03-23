@@ -1513,9 +1513,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
   target_has_recovery_patch = HasRecoveryPatch(target_zip)
   source_has_recovery_patch = HasRecoveryPatch(source_zip)
 
-  if (OPTIONS.block_based and
-      target_has_recovery_patch and
-      source_has_recovery_patch):
+  if OPTIONS.block_based:
     return WriteBlockIncrementalOTAPackage(target_zip, source_zip, output_zip)
 
   source_version = OPTIONS.source_info_dict["recovery_api_version"]
@@ -1781,6 +1779,15 @@ else
     # use only the boot image as the source.
 
     if not target_has_recovery_patch:
+      script.Print("install recovery image...");
+      print("update recovery image from %d:%s to %d:%s" %
+                      (source_recovery.size, source_recovery.sha1,
+                       target_recovery.size, target_recovery.sha1))
+      common.ZipWriteStr(output_zip, "recovery.img", target_recovery.data)
+      script.WriteRawImage("/recovery", "recovery.img")
+      so_far += target_recovery.size
+      script.SetProgress(so_far / total_patch_size)
+    else:
       def output_sink(fn, data):
         common.ZipWriteStr(output_zip, "recovery/" + fn, data)
         system_items.Get("system/" + fn)
@@ -1857,7 +1864,7 @@ else
     script.Print("Unpacking new vendor files...")
     script.UnpackPackageDir("vendor", "/vendor")
 
-  if updating_recovery and not target_has_recovery_patch:
+  if updating_recovery and target_has_recovery_patch:
     script.Print("Unpacking new recovery...")
     script.UnpackPackageDir("recovery", "/system")
 
