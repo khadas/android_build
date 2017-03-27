@@ -540,6 +540,43 @@ function print_lunch_menu()
     echo
 }
 
+function auto_patch()
+{
+    T=$(gettop)
+    local patch_dir=$T/device/amlogic/common/patch
+    echo "patch_dir $patch_dir"
+
+    for file in $patch_dir/*
+    do
+        if [ -f "$file" ] && [ "${file##*.}" == "patch" ]
+        then
+            local file_name=${file%.*}
+            #echo file_name $file_name
+            local resFile=`basename $file_name`
+            #echo resFile $resFile
+            local dir_name1=${resFile//#/\/}
+            #echo dir_name $dir_name
+            local dir_name=${dir_name1%/*}
+            #echo dir_name $dir_name
+            local dir=$T/$dir_name
+            #echo $dir
+            local change_id=`grep 'Change-Id' $file | cut -f 2 -d " "`
+            cd $dir; git log | grep $change_id 1>/dev/null 2>&1;
+            if [ $? -ne 0 ]; then
+                echo "patch $file"
+                cd $dir; git am $file;
+                if [ $? != 0 ]
+                then
+                    return 1
+                fi
+            else
+                echo "has patched"
+            fi
+            cd $T
+        fi
+    done
+}
+
 function lunch()
 {
     local answer
@@ -623,6 +660,13 @@ function lunch()
     set_stuff_for_environment
     printconfig
     destroy_build_var_cache
+
+    auto_patch
+    if [ $? != 0 ]
+    then
+        echo "patch error"
+        return 1
+    fi
 }
 
 # Tab completion for lunch.
