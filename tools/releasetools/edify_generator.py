@@ -328,6 +328,8 @@ class EdifyGenerator(object):
           self.script.append(
               'package_extract_file("%(fn)s", "%(device)s", "%(map)s");' % args)
         else:
+          if fn == "recovery.img":
+            self.script.append('backup_data_cache(%s, %s);' % ("recovery", "/cache/recovery/"))
           self.script.append(
               'package_extract_file("%(fn)s", "%(device)s");' % args)
       else:
@@ -339,8 +341,20 @@ class EdifyGenerator(object):
 
     if fn == "dtb.img":
         args = {'fn': fn}
+        self.script.append('backup_data_cache(%s, %s);' % ("dtb", "/cache/recovery/"))
         self.script.append(
             'write_dtb_image(package_extract_file("%(fn)s"));' % args)
+    else:
+        raise ValueError("don't know how to write \"%s\" to device" % (fn,))
+
+  def WriteBootloaderImage(self, mount_point, fn, mapfn=None):
+    """Write the given package file into the device."""
+
+    args = {'device': "bootloader", 'fn': fn}
+
+    if fn == "bootloader.img":
+        self.script.append(
+            'write_bootloader_image(package_extract_file("%(fn)s"), "%(device)s");' % args)
     else:
         raise ValueError("don't know how to write \"%s\" to device" % (fn,))
 
