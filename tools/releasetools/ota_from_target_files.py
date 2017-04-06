@@ -648,7 +648,12 @@ def WriteFullOTAPackage(input_zip, output_zip):
   device_specific.FullOTA_Assertions()
 
   if OPTIONS.ota_zip_check:
-    script.AppendExtra("ota_zip_check();")
+    script.AppendExtra('if ota_zip_check() == "1" then')
+    script.AppendExtra('set_bootloader_env("upgrade_step", "3");')
+    script.WriteDtbImage("dtb.img")
+    script.WriteRawImage("/recovery", "recovery.img")
+    script.AppendExtra('reboot_recovery();')
+    script.AppendExtra('else')
 
   # Two-step package strategy (in chronological order, which is *not*
   # the order in which the generated script has things):
@@ -819,6 +824,9 @@ endif;
 """ % bcb_dev)
 
   script.SetProgress(1)
+  if OPTIONS.ota_zip_check:
+    script.AppendExtra('endif;')
+
   script.AddToZip(input_zip, output_zip, input_path=OPTIONS.updater_binary)
   metadata["ota-required-cache"] = str(script.required_cache)
   WriteMetadata(metadata, output_zip)
