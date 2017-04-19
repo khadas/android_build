@@ -1866,7 +1866,6 @@ ifeq ($(strip $(TARGET_OTA_UPDATE_DTB)),true)
 	$(hide) mkdir -p $(zip_root)/DTB
 	$(hide) $(ACP) $(INSTALLED_BOARDDTB_TARGET) $(zip_root)/DTB/dtb
 endif
-	$(hide) $(ACP) $(INSTALLED_BOARDDTB_TARGET) $(zip_root)/BOOT/second
 endif
 ifdef BOARD_KERNEL_CMDLINE
 	$(hide) echo "$(BOARD_KERNEL_CMDLINE)" > $(zip_root)/BOOT/cmdline
