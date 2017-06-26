@@ -543,7 +543,7 @@ function print_lunch_menu()
 function auto_patch()
 {
     T=$(gettop)
-    local patch_dir=$T/device/amlogic/common/patch
+    local patch_dir=$T/device/khadas/common/patch
     echo "patch_dir $patch_dir"
 
     for file in $patch_dir/*
