@@ -575,6 +575,7 @@ def WriteFullOTAPackage(input_zip, output_zip):
   # in the target build.
   script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
 
+  hrr_omit_recovery = OPTIONS.info_dict.get("hrr_omit_recovery_image")
   oem_props = OPTIONS.info_dict.get("oem_fingerprint_properties")
   recovery_mount_options = OPTIONS.info_dict.get("recovery_mount_options")
   oem_dict = None
@@ -604,7 +605,10 @@ def WriteFullOTAPackage(input_zip, output_zip):
       info_dict=OPTIONS.info_dict)
 
   has_recovery_patch = HasRecoveryPatch(input_zip)
-  block_based = OPTIONS.block_based and has_recovery_patch
+  if not hrr_omit_recovery:
+    block_based = OPTIONS.block_based and has_recovery_patch
+  else:
+    block_based = OPTIONS.block_based
 
   metadata["ota-type"] = "BLOCK" if block_based else "FILE"
 
@@ -707,13 +711,14 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   boot_img = common.GetBootableImage(
       "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
 
+  hrr_omit_recovery = OPTIONS.info_dict.get("hrr_omit_recovery_image")
   if not block_based:
     def output_sink(fn, data):
       common.ZipWriteStr(output_zip, "recovery/" + fn, data)
       system_items.Get("system/" + fn)
 
-    common.MakeRecoveryPatch(OPTIONS.input_tmp, output_sink,
-                             recovery_img, boot_img)
+    if not hrr_omit_recovery:
+      common.MakeRecoveryPatch(OPTIONS.input_tmp, output_sink, recovery_img, boot_img)
 
     system_items.GetMetadata(input_zip)
     system_items.Get("system").SetPermissions(script)
