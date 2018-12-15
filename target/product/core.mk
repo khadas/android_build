@@ -53,9 +53,7 @@ ifneq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)), box)
 PRODUCT_PACKAGES += \
     Calendar \
     CalendarProvider \
-	Contacts \
 	DeskClock \
-	Email \
 	QuickSearchBox \
     PrintSpooler \
     Telecom \
