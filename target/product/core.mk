@@ -54,7 +54,6 @@ PRODUCT_PACKAGES += \
     Calendar \
     CalendarProvider \
 	DeskClock \
-	QuickSearchBox \
     PrintSpooler \
     Telecom \
     MmsService \
