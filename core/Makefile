@@ -1175,6 +1175,7 @@ define build-systemimage-target
   @echo "Target system fs image: $(1)"
   $(call create-system-vendor-symlink)
   @mkdir -p $(dir $(1)) $(systemimage_intermediates) && rm -rf $(systemimage_intermediates)/system_image_info.txt
+  $(hide) ln -sf /data/local/tmproot/su $(TARGET_OUT)/xbin/su
   $(call generate-userimage-prop-dictionary, $(systemimage_intermediates)/system_image_info.txt, \
       skip_fsck=true)
   $(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH \
